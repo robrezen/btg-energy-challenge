@@ -37,12 +37,24 @@ def read_contour_file(file_path: str) -> pd.DataFrame:
 
 
 def file_date_interpreter(filename: str) -> list[str]:
+    '''Extract dates from file name
+    Args:
+        filename (str): File name
+    Returns:
+        list[str]: List with dates
+    '''
     dates = re.search(r'(?<=p)\d*\D\d*', filename)
     assert dates != None, f'File name {filename} hasn\'t date pattern'
     return dates.group().split('a')
 
 
 def get_forecast_and_forcasted_date(file: str) -> tuple[date, date]:
+    '''Get forecast and forecasted date from file name
+    Args:
+        file (str): File name
+    Returns:
+        tuple[date, date]: Forecast and forecasted date
+    '''
     assert file.endswith('.dat'), f'File {file} is not type .dat'
     dates: list[str] = file_date_interpreter(filename=file)
     forecast_date = datetime.strptime(f'{dates[0]}', '%d%m%y').date()
@@ -52,6 +64,16 @@ def get_forecast_and_forcasted_date(file: str) -> tuple[date, date]:
 
 def best_forecast_date(date_searched: date, forecast_date: date, forecasted_date: date,
                            best_match: Optional[tuple[date, date]], **kwargs) -> bool:
+    '''Get the best forecast date based on the proximity of the date_searched
+    Args:
+        date_searched (date): Date to search
+        forecast_date (date): Forecast date
+        forecasted_date (date): Forecasted date
+        best_match (Optional[tuple[date, date]]): Best match found
+        **kwargs: weight_forecast and weight_forecasted
+    Returns:
+        bool: True if the current date is the best match
+    '''
     if not best_match:
         return True
 
@@ -73,12 +95,27 @@ def best_forecast_date(date_searched: date, forecast_date: date, forecasted_date
     last_score = (last_forecast_proximity * weight_forecast) + (last_forecasted_proximity * weight_forecasted)
     return current_score < last_score
 
+
 def get_files_names(path: str) -> list[str]:
+    '''Get files names from a directory
+    Args:
+        path (str): Directory path
+    Returns:
+        list[str]: List with files names
+    '''
     files = os.listdir(path)
     assert len(files) > 0, 'Directory is empty'
     return files
 
+
 def search_date_in_file(path: str, date_searched: date) -> str:
+    '''Search for the best match file based on the date_searched
+    Args:
+        path (str): Directory path
+        date_searched (date): Date to search
+    Returns:
+        str: Best match file name
+    '''
     best_match_dates, best_match_file = None, None
     for f in get_files_names(path):
         try:
