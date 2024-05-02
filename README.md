@@ -44,3 +44,9 @@ apresente graficamente a resposta para a pergunta.
 ### Resalvas
 - É permitido a utilização de bibliotecas extras
 - A entrega do desafio deve ser feita por GIT. Responda o email com o link do seu repositório.
+
+
+### Resolução
+Ao executar o main.py digite 1 para obter a resposta do desafio, o será gerado uma figura:
+![Precepitação Acumulada](accumulated_precipitation.jpg)
+Como bônus ao digitar 2 no menu é possível ver a precipitação para um dia especifico/data mais próxima.
