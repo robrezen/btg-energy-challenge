@@ -1,4 +1,3 @@
-from operator import ge
 import pandas as pd
 import re
 import os
@@ -9,10 +8,17 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon
 from datetime import datetime, date
-from typing import Counter, Optional
+from typing import Optional
 
 
 def read_data_file(file_path: str) -> pd.DataFrame:
+    '''
+    Read data file
+    Args:
+        file_path (str): File path
+    Returns:
+        pd.DataFrame: Data frame with file data
+    '''
     with open(file_path, 'r') as f:
         raw_file = f.readlines()
 
@@ -22,6 +28,12 @@ def read_data_file(file_path: str) -> pd.DataFrame:
 
 
 def read_contour_file(file_path: str) -> pd.DataFrame:
+    '''Read contour file
+    Args:
+        file_path (str): File path
+    Returns:
+        pd.DataFrame: Data frame with file data
+    '''
     line_split_comp = re.compile(r'\s*,')
 
     with open(file_path, 'r') as f:
@@ -188,13 +200,12 @@ def get_accumulated_precipitation(contour_df: pd.DataFrame, path: str) -> pd.Dat
 
 
 def main() -> None:
-
     dir_name = os.path.dirname(os.path.realpath(__file__))
     contour_df: pd.DataFrame = read_contour_file(os.path.join(dir_name, 'PSATCMG_CAMARGOS.bln'))
     stop = False
     forecast_files = os.path.join(dir_name, 'forecast_files')
     while not stop:
-        user_option = input('1 - Precipitação acumulada\n2 - Precipitação por forecasted date\n3 - Sair\n')
+        user_option = input('1 - Accumulated precipitation\n2 - Precipitation by forecasted date\n3 - Exit\n')
         if user_option == '1':
             accumulate_precipitation = get_accumulated_precipitation(contour_df=contour_df, path=forecast_files)
             plot_chart(contour_df=contour_df, precipitation_area=accumulate_precipitation, legend='Acumulada')
