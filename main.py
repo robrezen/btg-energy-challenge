@@ -1,9 +1,14 @@
+from itertools import accumulate
+import sys
 import pandas as pd
 import re
 import os
 import re
 import logging
 import traceback
+import geopandas as gpd
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon
 from datetime import datetime, date
 from typing import Optional
 
@@ -31,7 +36,7 @@ def read_contour_file(file_path: str) -> pd.DataFrame:
     return pd.DataFrame(float_raw_lines, columns=['lat', 'long'])
 
 
-def file_date_interpreter(filename: str) -> list:
+def file_date_interpreter(filename: str) -> list[str]:
     dates = re.search(r'(?<=p)\d*\D\d*', filename)
     assert dates != None, f'File name {filename} hasn\'t date pattern'
     return dates.group().split('a')
@@ -39,13 +44,13 @@ def file_date_interpreter(filename: str) -> list:
 
 def get_forecast_and_forcasted_date(file: str) -> tuple[date, date]:
     assert file.endswith('.dat'), f'File {file} is not type .dat'
-    dates: str = file_date_interpreter(file)
+    dates: list[str] = file_date_interpreter(filename=file)
     forecast_date = datetime.strptime(f'{dates[0]}', '%d%m%y').date()
     forecasted_date = datetime.strptime(f'{dates[1]}', '%d%m%y').date()
     return forecast_date, forecasted_date
 
 
-def best_forecast_date(f: str, date_searched: date, forecast_date: date, forecasted_date: date,
+def best_forecast_date(date_searched: date, forecast_date: date, forecasted_date: date,
                            best_match: Optional[tuple[date, date]], **kwargs) -> bool:
     if not best_match:
         return True
@@ -66,18 +71,22 @@ def best_forecast_date(f: str, date_searched: date, forecast_date: date, forecas
     weight_forecasted = kwargs['weight_forecasted']
     current_score = (current_forecast_proximity * weight_forecast) + (current_forecasted_proximity * weight_forecasted)
     last_score = (last_forecast_proximity * weight_forecast) + (last_forecasted_proximity * weight_forecasted)
-
     return current_score < last_score
 
-
-def search_date_in_file(path: str, date_searched: date) -> str:
+def get_files_names(path: str) -> list[str]:
     files = os.listdir(path)
     assert len(files) > 0, 'Directory is empty'
+    return files
+
+def search_date_in_file(path: str, date_searched: date) -> str:
     best_match_dates, best_match_file = None, None
-    for f in os.listdir(path):
+    for f in get_files_names(path):
         try:
             forecast_date, forecasted_date = get_forecast_and_forcasted_date(f)
-            is_best_date = best_forecast_date(f, date_searched, forecast_date, forecasted_date, best_match_dates, weight_forecast=0.5, weight_forecasted=0.5)
+
+            #weight_forecast and weight_forecasted are used to calculate the best match if date_searched is not in the file
+            is_best_date = best_forecast_date(date_searched=date_searched, forecast_date=forecast_date,forecasted_date=forecasted_date,
+                                              best_match=best_match_dates, weight_forecast=0.5, weight_forecasted=0.5)
             if is_best_date:
                 best_match_dates = (forecast_date, forecasted_date)
                 best_match_file = f
@@ -90,15 +99,71 @@ def search_date_in_file(path: str, date_searched: date) -> str:
     return best_match_file
 
 
+def plot_chart(contour_df: pd.DataFrame, precipitation_area: pd.DataFrame) -> None:
+    '''Plot chart with contour and precipitation area
+    Args:
+        contour_df (pd.DataFrame): Contour data
+        precipitation_area (pd.DataFrame): Precipitation area data
+    '''
+    plt.plot(contour_df['lat'].to_numpy(), contour_df['long'].to_numpy(), color='grey')
+    scatter = plt.scatter(precipitation_area['lat'], precipitation_area['long'], s=precipitation_area['data_value'],
+                          c=precipitation_area['data_value'], cmap='Blues', alpha=1, edgecolors='b', linewidth=1)
+    plt.colorbar(scatter, label='Precipitação')
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.title(f'''Precipitação Acumulada: {precipitation_area['data_value'].sum()}''')
+    plt.grid(True)
+    plt.savefig(f'accumulated_precipitation.jpg')
+    plt.show()
+
+
 def apply_contour(contour_df: pd.DataFrame, data_df: pd.DataFrame) -> pd.DataFrame:
-    pass
+    '''Apply contour to data
+    Args:
+        contour_df (pd.DataFrame): Contour data
+        data_df (pd.DataFrame): Data to apply contour
+    Returns:
+        pd.DataFrame: Data with contour applied
+    '''
+    gdf1 = gpd.GeoDataFrame(contour_df, geometry=gpd.points_from_xy(contour_df.lat, contour_df.long))
+    gdf2 = gpd.GeoDataFrame(data_df, geometry=gpd.points_from_xy(data_df.lat, data_df.long))
+    polygon = Polygon(zip(gdf1.lat, gdf1.long))
+    return pd.DataFrame(gdf2[gdf2.intersects(polygon)])[['lat', 'long', 'data_value']]
+
+
+def get_accumulated_precipitation(contour_df: pd.DataFrame, path: str) -> pd.DataFrame:
+    '''Get accumulated precipitation data from files in a directory
+    Args:
+        contour_df (pd.DataFrame): Contour data
+        path (str): Directory path
+    Returns:
+        pd.DataFrame: Accumulated precipitation data
+    '''
+    accumulate_df = pd.DataFrame()
+    for f in os.listdir(path):
+        if f.endswith('.dat'):
+            precipitation_area: pd.DataFrame = apply_contour(contour_df=contour_df, data_df=read_data_file(os.path.join(path, f)))
+            accumulate_df = pd.concat([accumulate_df, precipitation_area]).groupby(['lat', 'long']).sum().reset_index()
+    return accumulate_df
 
 
 def main() -> None:
     contour_df: pd.DataFrame = read_contour_file('PSATCMG_CAMARGOS.bln')
-    data_df: pd.DataFrame = read_data_file('forecast_files/ETA40_p011221a021221.dat')
-    contour_df: pd.DataFrame = apply_contour(contour_df=contour_df, data_df=data_df)
-
+    stop = False
+    while not stop:
+        user_option = input('1 - Precipitação acumulada\n2 - Precipitação por forecasted date\n3 - Sair\n')
+        if user_option == '1':
+            accumulate_precipitation = get_accumulated_precipitation(contour_df=contour_df, path='forecast_files')
+            plot_chart(contour_df=contour_df, precipitation_area=accumulate_precipitation)
+        elif user_option == '2':
+            date_str = input('Enter a date (DDMMYY): ')
+            file_name = search_date_in_file(path='forecast_files', date_searched=datetime.strptime(date_str, '%d%m%y').date())
+            data_df = read_data_file(os.path.join('forecast_files', file_name))
+            precipitation_area = apply_contour(contour_df=contour_df, data_df=data_df)
+            plot_chart(contour_df=contour_df, precipitation_area=precipitation_area)
+        else:
+            stop = True
+        
 
 if __name__ == '__main__':
     main()
