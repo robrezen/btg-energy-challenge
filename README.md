@@ -47,6 +47,8 @@ apresente graficamente a resposta para a pergunta.
 
 
 ### Resolução
-Ao executar o main.py digite 1 para obter a resposta do desafio, o será gerado uma figura:
-![Precepitação Acumulada](accumulated_precipitation.jpg)
+Ao executar o main.py digite 1 para obter a resposta do desafio, será gerada uma figura:
+
+![Precipitação Acumulada](accumulated_precipitation.jpg "Precipitação")
+
 Como bônus ao digitar 2 no menu é possível ver a precipitação para um dia especifico/data mais próxima.
