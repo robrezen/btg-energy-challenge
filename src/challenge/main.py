@@ -1,5 +1,4 @@
-from itertools import accumulate
-import sys
+from operator import ge
 import pandas as pd
 import re
 import os
@@ -10,7 +9,7 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon
 from datetime import datetime, date
-from typing import Optional
+from typing import Counter, Optional
 
 
 def read_data_file(file_path: str) -> pd.DataFrame:
@@ -136,7 +135,7 @@ def search_date_in_file(path: str, date_searched: date) -> str:
     return best_match_file
 
 
-def plot_chart(contour_df: pd.DataFrame, precipitation_area: pd.DataFrame) -> None:
+def plot_chart(contour_df: pd.DataFrame, precipitation_area: pd.DataFrame, legend: str) -> None:
     '''Plot chart with contour and precipitation area
     Args:
         contour_df (pd.DataFrame): Contour data
@@ -148,7 +147,7 @@ def plot_chart(contour_df: pd.DataFrame, precipitation_area: pd.DataFrame) -> No
     plt.colorbar(scatter, label='Precipitação')
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
-    plt.title(f'''Precipitação Acumulada: {precipitation_area['data_value'].sum()}''')
+    plt.title(f'''Precipitação {legend}: {precipitation_area['data_value'].sum().round(2)}''')
     plt.grid(True)
     plt.savefig(f'accumulated_precipitation.jpg')
     plt.show()
@@ -177,27 +176,34 @@ def get_accumulated_precipitation(contour_df: pd.DataFrame, path: str) -> pd.Dat
         pd.DataFrame: Accumulated precipitation data
     '''
     accumulate_df = pd.DataFrame()
-    for f in os.listdir(path):
+    for f in get_files_names(path):
         if f.endswith('.dat'):
             precipitation_area: pd.DataFrame = apply_contour(contour_df=contour_df, data_df=read_data_file(os.path.join(path, f)))
-            accumulate_df = pd.concat([accumulate_df, precipitation_area]).groupby(['lat', 'long']).sum().reset_index()
+            accumulate_df = pd.concat([accumulate_df, precipitation_area])
+    if not accumulate_df.empty:
+        accumulate_df = accumulate_df.groupby(['lat', 'long']).mean().reset_index()
+    else:
+        logging.warning('Acumulated precipitation is empty for contour data')
     return accumulate_df
 
 
 def main() -> None:
-    contour_df: pd.DataFrame = read_contour_file('PSATCMG_CAMARGOS.bln')
+
+    dir_name = os.path.dirname(os.path.realpath(__file__))
+    contour_df: pd.DataFrame = read_contour_file(os.path.join(dir_name, 'PSATCMG_CAMARGOS.bln'))
     stop = False
+    forecast_files = os.path.join(dir_name, 'forecast_files')
     while not stop:
         user_option = input('1 - Precipitação acumulada\n2 - Precipitação por forecasted date\n3 - Sair\n')
         if user_option == '1':
-            accumulate_precipitation = get_accumulated_precipitation(contour_df=contour_df, path='forecast_files')
-            plot_chart(contour_df=contour_df, precipitation_area=accumulate_precipitation)
+            accumulate_precipitation = get_accumulated_precipitation(contour_df=contour_df, path=forecast_files)
+            plot_chart(contour_df=contour_df, precipitation_area=accumulate_precipitation, legend='Acumulada')
         elif user_option == '2':
             date_str = input('Enter a date (DDMMYY): ')
-            file_name = search_date_in_file(path='forecast_files', date_searched=datetime.strptime(date_str, '%d%m%y').date())
-            data_df = read_data_file(os.path.join('forecast_files', file_name))
+            file_name = search_date_in_file(path=forecast_files, date_searched=datetime.strptime(date_str, '%d%m%y').date())
+            data_df = read_data_file(os.path.join(forecast_files, file_name))
             precipitation_area = apply_contour(contour_df=contour_df, data_df=data_df)
-            plot_chart(contour_df=contour_df, precipitation_area=precipitation_area)
+            plot_chart(contour_df=contour_df, precipitation_area=precipitation_area, legend=f'''Acumulada {'a'.join(file_date_interpreter(file_name))}''')
         else:
             stop = True
         
